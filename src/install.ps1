@@ -57,14 +57,29 @@ foreach ($c in $nodeCandidates) {
 }
 
 if (-not $node) {
-    Write-Warn "Node.js was not found. Downloading Node.js LTS (x64) and installing silently..."
-    $nodeUrl = "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi"
-    $msi = Join-Path $env:TEMP "node-v22.14.0-x64.msi"
+    Write-Warn "Node.js was not found. Downloading the latest Node.js LTS (x64) from the npmmirror mirror and installing silently..."
+
+    # Use the npmmirror (Taobao) CDN so Node.js downloads are fast and never
+    # hang on the default (often blocked) official source.
+    $nodeMirror = "https://cdn.npmmirror.com/binaries/node"
+    $fallbackVer = "v24.19.0"
+    $nodeVer = $fallbackVer
+    try {
+        $nodeIndex = Invoke-RestMethod -Uri "$nodeMirror/index.json" -UseBasicParsing -TimeoutSec 30
+        $latestLts = $nodeIndex | Where-Object { $_.lts } | Select-Object -First 1
+        if ($latestLts -and $latestLts.version) { $nodeVer = $latestLts.version }
+        Write-Ok "Resolved latest Node.js LTS: $nodeVer"
+    } catch {
+        Write-Warn "Could not resolve the latest Node.js version from npmmirror; falling back to $fallbackVer."
+    }
+
+    $nodeUrl = "$nodeMirror/$nodeVer/node-$nodeVer-x64.msi"
+    $msi = Join-Path $env:TEMP "node-$nodeVer-x64.msi"
     try {
         Invoke-WebRequest -Uri $nodeUrl -OutFile $msi -UseBasicParsing
-        Write-Ok "Downloaded Node.js installer."
+        Write-Ok "Downloaded Node.js installer from $nodeMirror."
     } catch {
-        Write-Warn "Could not download Node.js automatically. Please install it from https://nodejs.org and run this installer again."
+        Write-Warn "Could not download Node.js automatically. Please install it manually and run this installer again."
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -132,13 +147,19 @@ if (-not $SkipNpm) {
     } else {
         Write-Step "Installing @deepseek-ai/dsh globally (this may take a few minutes)..."
     }
-    & $npm "install" "-g" "@deepseek-ai/dsh"
+
+    # Use the npmmirror registry so package downloads never hang on the default
+    # (often slow/blocked) registry. Persist it for the user and also pass it
+    # explicitly for this exact install.
+    $npmRegistry = "https://registry.npmmirror.com"
+    & $npm "config" "set" "registry" $npmRegistry
+    & $npm "install" "-g" "@deepseek-ai/dsh" "--registry=$npmRegistry"
     if ($LASTEXITCODE -ne 0) {
-        Write-Warn "npm install failed. Check your internet connection and try again."
+        Write-Warn "npm install failed. Check your internet connection (mirror: $npmRegistry) and try again."
         Read-Host "Press Enter to exit"
         exit 1
     }
-    Write-Ok "@deepseek-ai/dsh installed/updated."
+    Write-Ok "@deepseek-ai/dsh installed/updated (registry: $npmRegistry)."
 } else {
     Write-Step "Skipping npm install (dsh must already be present)."
 }

@@ -39,6 +39,19 @@ dsh-installer/
 
 命令行 / 无人值守：`DSH-Setup.exe --silent`
 
+## 国内镜像（已内置）
+
+安装器默认使用国内镜像源，避免下载卡住/超时：
+
+- **npm 包**：`@deepseek-ai/dsh` 通过 `--registry=https://registry.npmmirror.com` 安装，并附带
+  写入用户级 npm 配置（`npm config set registry`）。
+- **Node.js**：从 `https://cdn.npmmirror.com/binaries/node` 下载**最新 LTS**（优先通过
+  `index.json` 动态解析，解析失败时回退到内置版本 `v24.19.0`）并静默安装。
+
+如需改用官方源，删除 `install.ps1` 中下列两处即可：
+- `# 3` 段里的 `$npmRegistry` 及 `--registry` 参数；
+- `# 1` 段里的 `$nodeMirror`，改回 `https://nodejs.org/dist`。
+
 ## 从源码构建
 
 需要 Windows 系统，并满足：
